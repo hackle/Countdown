@@ -13,26 +13,37 @@ let split (xs: int list) : int list list =
     |> List.collect (fun n -> [ List.take n xs; List.skip n xs ])
     |> List.filter (fun l -> List.length l > 1)
 
-[<StructuredFormatDisplay("{AsString}")>]
 type Value = V of int | Invalid with
-    member x.ToString() =
+    override x.ToString() =
         match x with
         | V v -> string v
         | _ -> String.Empty
-    member x.AsString = x.ToString()
 
 type Result = Value * string list
-let add l r = V (l + r)
-let sub l r = if l < r then Invalid else V (l - r)
-let mul l r = V (l * r)
-let div l r = if r = 0 || l % r <> 0 then Invalid else V (l / r)
-let apply (op: int -> int -> Value)  (l: Value) (r: Value) : Value =
+
+type Calc = int -> int -> Value
+type Op = Add | Sub | Mul | Div with
+    override x.ToString() =
+        match x with
+        | Add _ -> "+"
+        | Sub _ -> "-"
+        | Mul _ -> "*"
+        | Div _ -> "/"
+let applyOp op l r =
+    match op with
+    | Add -> V (l + r)
+    | Sub -> if l < r then Invalid else V (l - r)
+    | Mul -> V (l * r)
+    | Div -> if r = 0 || l % r <> 0 then Invalid else V (l / r)
+
+let allOps = [ Add; Sub; Mul; Div ]
+
+let apply (op: Op)  (l: Value) (r: Value) : Value =
     match l, r with
     | Invalid, _ -> Invalid
     | _, Invalid -> Invalid
-    | V l', V r' -> op l' r'
+    | V l', V r' -> applyOp op l' r'
 
-let allOps = [ add; sub; mul; div; ]
 let rec applySet (xs: Value list) : Result seq =
     seq {
         match xs with
@@ -41,7 +52,7 @@ let rec applySet (xs: Value list) : Result seq =
         | x::xs' ->
             for op in allOps do
                 for (v, cs) in applySet xs' do
-                    yield apply op x v, string(x)::cs
+                    yield apply op x v, string(x)::(string(op)::cs)
     }
 
 let solve' (xs: int list) (target: int) =
