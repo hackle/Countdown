@@ -1,4 +1,3 @@
-open System
 let rec perm l =
     seq {
         if Seq.isEmpty l then 
@@ -12,18 +11,16 @@ let split n xs = Seq.take n xs, Seq.skip n xs
 let split2 xs = 
     [ 1 .. (Seq.length xs) ]
     |> Seq.map (fun n -> split n xs)
-let splitAll (xs: 'a seq) : 'a seq seq =
+let splitAll (xs: 'a seq) : 'a seq seq =    
     xs
-    |> Seq.map split2
-    |> Seq.collect id
-    |> Seq.collect (fun (l, r) -> l::r)
-    |> Seq.filter (Seq.isEmpty>>not)
+    |> split2
+    |> Seq.collect (fun (l, r) -> [l; r])
 
 type Value = V of int | Invalid with
     override x.ToString() =
         match x with
         | V v -> string v
-        | _ -> String.Empty
+        | _ -> ""
 
 type Result = Value * string list
 
@@ -50,23 +47,33 @@ let apply (op: Op)  (l: Value) (r: Value) : Value =
     | _, Invalid -> Invalid
     | V l', V r' -> applyOp op l' r'
 
-let rec applySet (xs: Value seq) : Result seq =
+let rec applySet (xs: Value list) : Result seq =
     seq {
-        for l, r in xs do
-            match xs |> List.ofSeq with
-            | [] -> yield Invalid, []
-            | [x] -> yield x, [string(x)]
-            | x::xs' ->
-                for op in allOps do
-                    for (v, cs) in applySet xs' do
-                        yield apply op x v, string(x)::(string(op)::cs)
+        match xs with
+        | [] -> yield Invalid, []
+        | [x] -> yield x, [string x]
+        | _ ->
+            for l, r in split2 xs do
+                // avoid infinite loop
+                if Seq.length l <> List.length xs && Seq.length r <> List.length xs then
+                    match List.ofSeq l, List.ofSeq r with
+                    | [l'], [r'] ->
+                        for op in allOps do 
+                            yield apply op l' r', [ "("; string(l'); string(op); string(r'); ")" ]
+                    | ls, [] -> yield! applySet ls
+                    | [], rs -> yield! applySet rs
+                    | ls, rs -> 
+                        for (lval, ldes) in applySet ls do
+                            for (rval, rdes) in applySet rs do
+                                for op in allOps do 
+                                    yield apply op lval rval, ldes @ [ string op ] @ rdes
     }
 
 let solve' (target: int) (xs: int seq) =
     let t = V target
     seq {
         for xs' in splitAll xs do
-            for (v, cs) in applySet (Seq.map V xs') do
+            for (v, cs) in applySet (Seq.map V xs' |> List.ofSeq) do
                 if v = t then yield (System.String.Join("", cs))
     }
 
