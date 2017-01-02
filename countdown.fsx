@@ -8,10 +8,16 @@ let rec perm l =
                 yield x::x'
     }
 
-let split (xs: int list) : int list list =
-    [ 1 .. (List.length xs) ]
-    |> List.collect (fun n -> [ List.take n xs; List.skip n xs ])
-    |> List.filter (fun l -> List.length l > 1)
+let split n xs = Seq.take n xs, Seq.skip n xs
+let split2 xs = 
+    [ 1 .. (Seq.length xs) ]
+    |> Seq.map (fun n -> split n xs)
+let splitAll (xs: 'a seq) : 'a seq seq =
+    xs
+    |> Seq.map split2
+    |> Seq.collect id
+    |> Seq.collect (fun (l, r) -> l::r)
+    |> Seq.filter (Seq.isEmpty>>not)
 
 type Value = V of int | Invalid with
     override x.ToString() =
@@ -44,21 +50,37 @@ let apply (op: Op)  (l: Value) (r: Value) : Value =
     | _, Invalid -> Invalid
     | V l', V r' -> applyOp op l' r'
 
-let rec applySet (xs: Value list) : Result seq =
+let rec applySet (xs: Value seq) : Result seq =
     seq {
-        match xs with
-        | [] -> yield Invalid, []
-        | [x] -> yield x, [string(x)]
-        | x::xs' ->
-            for op in allOps do
-                for (v, cs) in applySet xs' do
-                    yield apply op x v, string(x)::(string(op)::cs)
+        for l, r in xs do
+            match xs |> List.ofSeq with
+            | [] -> yield Invalid, []
+            | [x] -> yield x, [string(x)]
+            | x::xs' ->
+                for op in allOps do
+                    for (v, cs) in applySet xs' do
+                        yield apply op x v, string(x)::(string(op)::cs)
     }
 
-let solve' (xs: int list) (target: int) =
+let solve' (target: int) (xs: int seq) =
     let t = V target
     seq {
-        for xs' in split xs do
-            for (v, cs) in applySet (List.map V xs') do
+        for xs' in splitAll xs do
+            for (v, cs) in applySet (Seq.map V xs') do
                 if v = t then yield (System.String.Join("", cs))
     }
+
+let solve (target: int) (xs: int list) =
+    let sw = new System.Diagnostics.Stopwatch()
+    sw.Start()
+    xs
+    |> perm
+    |> Seq.collect (fun s -> solve' target s)
+    |> Seq.indexed
+    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    sw.Stop()
+    printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
+
+// solve 20 [1;2;3;4;5]
+// solve 250 [1; 3; 7; 10; 25; 50]
+ // solve 750 [1; 3; 7; 10; 25; 50]
