@@ -24,10 +24,10 @@ type Op = Add | Sub | Mul | Div with
         | Div _ -> "/"
 let applyOp op l r =
     match op with
-    | Add -> if l > r then V (l + r) else Invalid
+    | Add -> if l > r || l = 1 || r = 1 then Invalid else V (l + r)
     | Sub -> if l < r then Invalid else V (l - r)
-    | Mul -> if l > r then V (l * r) else Invalid
-    | Div -> if r = 0 || l < r || l % r <> 0 then Invalid else V (l / r)
+    | Mul -> if l > r || l = 1 || r = 1 then Invalid else V (l * r)
+    | Div -> if r = 0 || l < r || r = 1 || l % r <> 0 then Invalid else V (l / r)
 
 let allOps = [ Add; Sub; Mul; Div ]
 
@@ -48,16 +48,14 @@ let rec applySet (xs: Value list) : Result seq =
         | [x] -> yield x, string x
         | x::_ ->
             for l, r in split xs do
-                // avoid infinite loop
-                if Seq.length l <> List.length xs && Seq.length r <> List.length xs then
-                    match List.ofSeq l, List.ofSeq r with
-                    | ls, [] -> yield! applySet ls
-                    | [], rs -> yield! applySet rs
-                    | ls, rs -> 
-                        for (lval, ldes) in applySet ls do
-                            for (rval, rdes) in applySet rs do
-                                for op in allOps do 
-                                    yield apply op lval rval, sprintf "(%s%s%s)" (string ldes) (string op) (string rdes)
+                match List.ofSeq l, List.ofSeq r with
+                | ls, [] -> yield! applySet ls
+                | [], rs -> yield! applySet rs
+                | ls, rs -> 
+                    for (lval, ldes) in applySet ls do
+                        for (rval, rdes) in applySet rs do
+                            for op in allOps do 
+                                yield apply op lval rval, "(" + (string ldes) + (string op) + (string rdes) + ")"
     }
 
 let solve' (target: int) (xs: int seq) =
@@ -73,8 +71,10 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    |> Seq.indexed
-    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    |> Seq.length
+    |> printfn "%i"
+    // |> Seq.indexed
+    // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
 
