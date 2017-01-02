@@ -34,10 +34,10 @@ type Op = Add | Sub | Mul | Div with
         | Div _ -> "/"
 let applyOp op l r =
     match op with
-    | Add -> V (l + r)
+    | Add -> if l > r then V (l + r) else Invalid
     | Sub -> if l < r then Invalid else V (l - r)
-    | Mul -> V (l * r)
-    | Div -> if r = 0 || l % r <> 0 then Invalid else V (l / r)
+    | Mul -> if l > r then V (l * r) else Invalid
+    | Div -> if r = 0 || l < r || l % r <> 0 then Invalid else V (l / r)
 
 let allOps = [ Add; Sub; Mul; Div ]
 
@@ -50,9 +50,9 @@ let apply (op: Op)  (l: Value) (r: Value) : Value =
 let rec applySet (xs: Value list) : Result seq =
     seq {
         match xs with
-        | [] -> yield Invalid, []
+        | [] -> ()
         | [x] -> yield x, [string x]
-        | _ ->
+        | x::_ ->
             for l, r in split2 xs do
                 // avoid infinite loop
                 if Seq.length l <> List.length xs && Seq.length r <> List.length xs then
@@ -66,7 +66,7 @@ let rec applySet (xs: Value list) : Result seq =
                         for (lval, ldes) in applySet ls do
                             for (rval, rdes) in applySet rs do
                                 for op in allOps do 
-                                    yield apply op lval rval, ldes @ [ string op ] @ rdes
+                                    yield apply op lval rval, ["("] @ ldes @ [ string op ] @ rdes @ [ ")" ]
     }
 
 let solve' (target: int) (xs: int seq) =
@@ -83,11 +83,13 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    |> Seq.indexed
-    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    |> Seq.length
+    |> printfn "%i"
+    // |> Seq.indexed
+    // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
 
 // solve 20 [1;2;3;4;5]
 // solve 250 [1; 3; 7; 10; 25; 50]
- // solve 750 [1; 3; 7; 10; 25; 50]
+ // solve 765 [1; 3; 7; 10; 25; 50]
