@@ -11,6 +11,11 @@ let split n xs = Seq.take n xs, Seq.skip n xs
 let split2 xs = 
     [ 1 .. (Seq.length xs) ]
     |> Seq.map (fun n -> split n xs)
+
+let safeSplit xs =
+    [ 1 .. (Seq.length xs - 1)]
+    |> Seq.map (fun n -> split n xs)
+
 let splitAll (xs: 'a seq) : 'a seq seq =    
     xs
     |> split2
@@ -22,7 +27,7 @@ type Value = V of int | Invalid with
         | V v -> string v
         | _ -> ""
 
-type Result = Value * string list
+type Result = Value * string
 
 type Calc = int -> int -> Value
 type Op = Add | Sub | Mul | Div with
@@ -50,23 +55,23 @@ let apply (op: Op)  (l: Value) (r: Value) : Value =
 let rec applySet (xs: Value list) : Result seq =
     seq {
         match xs with
-        | [] -> ()
-        | [x] -> yield x, [string x]
+        | [] -> yield Invalid, ""
+        | [x] -> yield x, string x
         | x::_ ->
-            for l, r in split2 xs do
+            for l, r in safeSplit xs do
                 // avoid infinite loop
                 if Seq.length l <> List.length xs && Seq.length r <> List.length xs then
                     match List.ofSeq l, List.ofSeq r with
                     | [l'], [r'] ->
                         for op in allOps do 
-                            yield apply op l' r', [ "("; string(l'); string(op); string(r'); ")" ]
+                            yield apply op l' r', sprintf "(%s%s%s)" (string l') (string op) (string r')
                     | ls, [] -> yield! applySet ls
                     | [], rs -> yield! applySet rs
                     | ls, rs -> 
                         for (lval, ldes) in applySet ls do
                             for (rval, rdes) in applySet rs do
                                 for op in allOps do 
-                                    yield apply op lval rval, ["("] @ ldes @ [ string op ] @ rdes @ [ ")" ]
+                                    yield apply op lval rval, sprintf "(%s%s%s)" (string ldes) (string op) (string rdes)
     }
 
 let solve' (target: int) (xs: int seq) =
@@ -83,10 +88,8 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    |> Seq.length
-    |> printfn "%i"
-    // |> Seq.indexed
-    // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    |> Seq.indexed
+    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
 
