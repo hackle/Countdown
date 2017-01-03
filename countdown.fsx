@@ -25,19 +25,19 @@ type Op = Add | Sub | Mul | Div with
 
 type CalcTree = Single of Value | Complex of (CalcTree * CalcTree * Op)
 
-// let applyOp op l r =
-//     match op with
-//     | Add -> if l > r || l = 1 || r = 1 then Invalid else V (l + r)
-//     | Sub -> if l < r then Invalid else V (l - r)
-//     | Mul -> if l > r || l = 1 || r = 1 then Invalid else V (l * r)
-//     | Div -> if r = 0 || l < r || r = 1 || l % r <> 0 then Invalid else V (l / r)
-
 let applyOp op l r =
     match op with
-    | Add -> V (l + r)
+    | Add -> if l > r then Invalid else V (l + r)
     | Sub -> if l < r then Invalid else V (l - r)
-    | Mul -> V (l * r)
-    | Div -> if r = 0 || l % r <> 0 then Invalid else V (l / r)
+    | Mul -> if l > r || l = 1 || r = 1 then Invalid else V (l * r)
+    | Div -> if r = 0 || l < r || r = 1 || l % r <> 0 then Invalid else V (l / r)
+
+// let applyOp op l r =
+//     match op with
+//     | Add -> V (l + r)
+//     | Sub -> if l < r then Invalid else V (l - r)
+//     | Mul -> V (l * r)
+//     | Div -> if r = 0 || l % r <> 0 then Invalid else V (l / r)
 
 let allOps = [ Add; Sub; Mul; Div ]
 
@@ -54,11 +54,7 @@ let split xs =
 let rec runCalcTree (ctree: CalcTree) =
     match ctree with
     | Single v -> v
-    | Complex (Single Invalid, _, op) -> Invalid
-    | Complex (_, Single Invalid, op) -> Invalid
-    | Complex (lv, rv, op) -> 
-        let left = runCalcTree lv
-        if left = Invalid then Invalid else apply op left (runCalcTree rv)
+    | Complex (lv, rv, op) -> apply op (runCalcTree lv) (runCalcTree rv)
 let rec applySet (xs: Value list) : CalcTree seq =
     seq {
         match xs with
@@ -77,12 +73,33 @@ let rec applySet (xs: Value list) : CalcTree seq =
                                 if res <> Invalid then yield tree
     }
 
+let ElementPosition = Left | Right
+let printComplex lv rv op treeAbove pos =
+    let shouldBracket = 
+        match treeAbove with
+        | Single _ -> false
+        | Complex (lt, rt, opAbove) ->
+            match op, opAbove with
+            | Add, Add -> false
+            | Add, _ -> true
+            | Sub, Add -> false
+            | Sub, _ -> true
+            | Mul, Div -> true
+            | Mul, _ -> false
+            | Div, Div -> true
+            | Div, _ -> false
+        
+    match shouldBracket with
+    | true -> "(" + lv + (string op) + rv + ")"
+    | false -> lv + (string op) + rv
+let printTree (ctree: CalcTree) =
+    let rec printTree' (ctree: CalcTree) (treeAbove: CalcTree) =
+        match ctree with
+        | Single v -> string v
+        | Complex (lv, rv, op) -> printComplex (printTree' lv ctree) (printTree' rv ctree) op treeAbove
+    printTree' ctree (Single Invalid)
 
-let rec printTree (ctree: CalcTree) =
-    match ctree with
-    | Single v -> string v
-    | Complex (lv, rv, op) -> (printTree lv) + (string op) + (printTree rv)
-
+// solve' 20 [1;2;3;4;6] |> Seq.map printTree |> Seq.iter (printfn "%s")
 let solve' (target: int) (xs: int seq) =
     let t = V target
     seq {
@@ -96,9 +113,10 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    |> Seq.length
-    |> printfn "%i"
-    // |> Seq.indexed
+    |> Seq.map printTree
+    |> Seq.distinct
+    |> Seq.indexed
+    |> Seq.iter (printfn "%A")
     // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
