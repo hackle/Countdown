@@ -14,7 +14,6 @@ type Value = V of int | Invalid with
 
 type Result = Value * string
 
-type Calc = int -> int -> Value
 type Op = Add | Sub | Mul | Div with
     override x.ToString() =
         match x with
@@ -22,12 +21,23 @@ type Op = Add | Sub | Mul | Div with
         | Sub _ -> "-"
         | Mul _ -> "*"
         | Div _ -> "/"
+
+
+type CalcTree = Single of Value | Complex of (CalcTree * CalcTree * Op)
+
+// let applyOp op l r =
+//     match op with
+//     | Add -> if l > r || l = 1 || r = 1 then Invalid else V (l + r)
+//     | Sub -> if l < r then Invalid else V (l - r)
+//     | Mul -> if l > r || l = 1 || r = 1 then Invalid else V (l * r)
+//     | Div -> if r = 0 || l < r || r = 1 || l % r <> 0 then Invalid else V (l / r)
+
 let applyOp op l r =
     match op with
-    | Add -> if l > r || l = 1 || r = 1 then Invalid else V (l + r)
+    | Add -> V (l + r)
     | Sub -> if l < r then Invalid else V (l - r)
-    | Mul -> if l > r || l = 1 || r = 1 then Invalid else V (l * r)
-    | Div -> if r = 0 || l < r || r = 1 || l % r <> 0 then Invalid else V (l / r)
+    | Mul -> V (l * r)
+    | Div -> if r = 0 || l % r <> 0 then Invalid else V (l / r)
 
 let allOps = [ Add; Sub; Mul; Div ]
 
@@ -41,32 +51,41 @@ let split xs =
     [ 1 .. (Seq.length xs - 1)]
     |> Seq.map (fun n -> Seq.take n xs, Seq.skip n xs)
 
-let rec applySet (xs: Value list) : Result seq =
+let rec applySet (xs: Value list) : CalcTree seq =
     seq {
         match xs with
-        | [] -> () // this should never happen as empty sets are handled below
-        | [x] -> yield x, string x
+        | [x] -> yield Single x
         | _ ->
             for l, r in split xs do
                 match List.ofSeq l, List.ofSeq r with
                 | ls, [] -> yield! applySet ls
                 | [], rs -> yield! applySet rs
                 | ls, rs -> 
-                    for (lval, ldes) in applySet ls do
-                        for (rval, rdes) in applySet rs do
+                    for ltree in applySet ls do
+                        for rtree in applySet rs do
                             for op in allOps do 
-                                let res = apply op lval rval, "(" + (string ldes) + (string op) + (string rdes) + ")"
-                                // throw away invalid results
-                                match res with
-                                | V v, _ -> yield res
-                                | _, _ -> ()
+                                yield Complex (ltree, rtree, op)
     }
+
+let rec runCalcTree (ctree: CalcTree) =
+    match ctree with
+    | Single v -> v
+    | Complex (Single Invalid, _, op) -> Invalid
+    | Complex (_, Single Invalid, op) -> Invalid
+    | Complex (lv, rv, op) -> 
+        let left = runCalcTree lv
+        if left = Invalid then Invalid else apply op left (runCalcTree rv)
+
+let rec printTree (ctree: CalcTree) =
+    match ctree with
+    | Single v -> string v
+    | Complex (lv, rv, op) -> (printTree lv) + (string op) + (printTree rv)
 
 let solve' (target: int) (xs: int seq) =
     let t = V target
     seq {
-        for (v, cs) in applySet (Seq.map V xs |> List.ofSeq) do
-            if v = t then yield (System.String.Join("", cs))
+        for calcTree in applySet (Seq.map V xs |> List.ofSeq) do
+            if runCalcTree calcTree = t then yield calcTree
     }
 
 let solve (target: int) (xs: int list) =
@@ -75,10 +94,10 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    // |> Seq.length
-    // |> printfn "%i"
-    |> Seq.indexed
-    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    |> Seq.length
+    |> printfn "%i"
+    // |> Seq.indexed
+    // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
 
