@@ -51,10 +51,18 @@ let split xs =
     [ 1 .. (Seq.length xs - 1)]
     |> Seq.map (fun n -> Seq.take n xs, Seq.skip n xs)
 
+let rec runCalcTree (ctree: CalcTree) =
+    match ctree with
+    | Single v -> v
+    | Complex (Single Invalid, _, op) -> Invalid
+    | Complex (_, Single Invalid, op) -> Invalid
+    | Complex (lv, rv, op) -> 
+        let left = runCalcTree lv
+        if left = Invalid then Invalid else apply op left (runCalcTree rv)
 let rec applySet (xs: Value list) : CalcTree seq =
     seq {
         match xs with
-        | [x] -> yield Single x
+        | [x] -> if x <> Invalid then yield Single x
         | _ ->
             for l, r in split xs do
                 match List.ofSeq l, List.ofSeq r with
@@ -64,17 +72,11 @@ let rec applySet (xs: Value list) : CalcTree seq =
                     for ltree in applySet ls do
                         for rtree in applySet rs do
                             for op in allOps do 
-                                yield Complex (ltree, rtree, op)
+                                let tree = Complex (ltree, rtree, op)
+                                let res = runCalcTree tree
+                                if res <> Invalid then yield tree
     }
 
-let rec runCalcTree (ctree: CalcTree) =
-    match ctree with
-    | Single v -> v
-    | Complex (Single Invalid, _, op) -> Invalid
-    | Complex (_, Single Invalid, op) -> Invalid
-    | Complex (lv, rv, op) -> 
-        let left = runCalcTree lv
-        if left = Invalid then Invalid else apply op left (runCalcTree rv)
 
 let rec printTree (ctree: CalcTree) =
     match ctree with
