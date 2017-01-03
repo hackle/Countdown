@@ -44,9 +44,9 @@ let split xs =
 let rec applySet (xs: Value list) : Result seq =
     seq {
         match xs with
-        | [] -> yield Invalid, ""
+        | [] -> () // this should never happen as empty sets are handled below
         | [x] -> yield x, string x
-        | x::_ ->
+        | _ ->
             for l, r in split xs do
                 match List.ofSeq l, List.ofSeq r with
                 | ls, [] -> yield! applySet ls
@@ -55,7 +55,11 @@ let rec applySet (xs: Value list) : Result seq =
                     for (lval, ldes) in applySet ls do
                         for (rval, rdes) in applySet rs do
                             for op in allOps do 
-                                yield apply op lval rval, "(" + (string ldes) + (string op) + (string rdes) + ")"
+                                let res = apply op lval rval, "(" + (string ldes) + (string op) + (string rdes) + ")"
+                                // throw away invalid results
+                                match res with
+                                | V v, _ -> yield res
+                                | _, _ -> ()
     }
 
 let solve' (target: int) (xs: int seq) =
@@ -71,10 +75,10 @@ let solve (target: int) (xs: int list) =
     xs
     |> perm
     |> Seq.collect (fun s -> solve' target s)
-    |> Seq.length
-    |> printfn "%i"
-    // |> Seq.indexed
-    // |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
+    // |> Seq.length
+    // |> printfn "%i"
+    |> Seq.indexed
+    |> Seq.iter (fun (i, v) -> printfn "%i %A" i v)
     sw.Stop()
     printfn "Time elapsed: %f" sw.Elapsed.TotalMilliseconds
 
